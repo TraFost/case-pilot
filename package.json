@@ -1,12 +1,13 @@
 {
-	"name": "nextjs-convex-boilerplate",
-	"version": "0.1.0",
+	"name": "case-pilot",
+	"version": "0.0.0",
 	"private": true,
 	"scripts": {
 		"dev": "next dev",
 		"build": "next build",
 		"start": "next start",
-		"lint": "eslint"
+		"lint": "eslint",
+		"dev:server": "npx convex dev"
 	},
 	"dependencies": {
 		"@ai-sdk/openai": "^3.0.25",
