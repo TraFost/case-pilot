@@ -5,13 +5,13 @@ export default defineSchema({
 	// USERS (Suspects / Accounts)
 	users: defineTable({
 		name: v.string(),
-		email: v.optional(v.string()),
+		email: v.string(),
 		accountType: v.string(), // "Retail" | "VIP" | "Merchant"
 		flagged: v.boolean(),
 		riskScore: v.number(), // 0–100 live aggregate
 		status: v.string(), // "Active" | "Frozen" | "ShadowBanned"
 		lastLoginIp: v.optional(v.string()),
-		walletAddress: v.optional(v.string()),
+		walletAddress: v.string(),
 		rawProfile: v.any(), // full JSON context for AI
 	}).index("by_status", ["status"]),
 
@@ -39,13 +39,11 @@ export default defineSchema({
 		amount: v.number(),
 		status: v.string(), // "New" | "Investigating" | "Resolved"
 		createdAt: v.number(),
-		isRealtime: v.boolean(), // injected demo alerts
-		attackBatchId: v.optional(v.string()), // group the burst
 		evidenceTxIds: v.array(v.id("transactions")), // direct proof links
 	})
 		.index("by_status", ["status"])
-		.index("by_realtime", ["isRealtime"])
-		.index("by_created", ["createdAt"]),
+		.index("by_created", ["createdAt"])
+		.index("by_riskScore", ["riskScore"]),
 
 	// CASES (Investigation Workspace)
 	cases: defineTable({
@@ -57,7 +55,9 @@ export default defineSchema({
 		status: v.string(), // "Open" | "Actioned" | "Closed"
 		timeline: v.any(), // ordered events JSON
 		createdAt: v.number(),
-	}).index("by_status", ["status"]),
+	})
+		.index("by_status", ["status"])
+		.index("by_alert", ["alertId"]),
 
 	// ENFORCEMENT ACTIONS
 	actions: defineTable({
@@ -68,7 +68,9 @@ export default defineSchema({
 		executedAt: v.number(),
 		result: v.string(), // "Success" | "Failed"
 		notes: v.optional(v.string()),
-	}).index("by_user", ["userId"]),
+	})
+		.index("by_user", ["userId"])
+		.index("by_case", ["caseId"]),
 
 	// RING ENTITIES
 	entities: defineTable({
