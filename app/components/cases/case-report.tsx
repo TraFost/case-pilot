@@ -1,3 +1,5 @@
+import { formatTimelineTime } from "@/utils/date.util";
+
 type TimelineItem = {
 	time: string;
 	event: string;
@@ -71,8 +73,8 @@ export default function CaseReport({
 						<div className="space-y-2 text-xs">
 							{timeline.map((item, idx) => (
 								<div key={idx} className="flex gap-2">
-									<span className="font-mono text-primary w-16">
-										{item.time}
+									<span className="font-mono text-primary">
+										{formatTimelineTime(item.time)}
 									</span>
 									<span className="text-muted-foreground">{item.event}</span>
 								</div>

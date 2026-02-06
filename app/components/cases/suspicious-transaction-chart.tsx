@@ -1,5 +1,3 @@
-"use client";
-
 import {
 	ScatterChart,
 	Scatter,
@@ -9,35 +7,90 @@ import {
 	Tooltip,
 	ResponsiveContainer,
 } from "recharts";
+import {
+	formatDateTime,
+	formatTimeLabel,
+	toHourDecimal,
+} from "@/utils/date.util";
+import {
+	formatCurrencyWithCode,
+	normalizeCurrency,
+	type Currency,
+} from "@/utils/currency.util";
 
 type Transaction = {
 	amount: number;
+	currency?: string | null;
 	timestamp: number;
 	isFraud: boolean;
 	fraudTag?: string | null;
 };
 
-interface SuspiciousTransactionChartProps {
-	transactions: Transaction[];
+type ChartPoint = {
+	time: number;
+	timeLabel: string;
+	timestamp: number;
+	amount: number;
+	currency: Currency;
+	type: "suspicious" | "normal";
+};
+
+function formatHourDecimalLabel(value: number) {
+	const hours = Math.floor(value);
+	const minutes = Math.round((value - hours) * 60);
+	const paddedHours = `${hours}`.padStart(2, "0");
+	const paddedMinutes = `${minutes}`.padStart(2, "0");
+
+	return `${paddedHours}:${paddedMinutes}`;
 }
 
-function toHourDecimal(timestamp: number) {
-	const date = new Date(timestamp);
-	return date.getHours() + date.getMinutes() / 60;
+type CustomTooltipProps = {
+	active?: boolean;
+	payload?: Array<{ payload: ChartPoint }>;
+};
+
+function CustomTooltip({ active, payload }: CustomTooltipProps) {
+	if (!active || !payload || payload.length === 0) return null;
+
+	const point = payload[0]?.payload as ChartPoint | undefined;
+	if (!point) return null;
+
+	const amount = formatCurrencyWithCode(point.amount, point.currency);
+	const timeLabel = point.timestamp
+		? formatDateTime(point.timestamp)
+		: point.timeLabel;
+
+	return (
+		<div className="rounded border border-border bg-card/95 p-3 text-xs shadow">
+			<p className="text-xs text-muted-foreground">{timeLabel}</p>
+			<p className="text-sm font-semibold text-foreground">{amount}</p>
+			<p className="text-xs text-muted-foreground capitalize">
+				{point.type} transaction
+			</p>
+		</div>
+	);
+}
+
+interface SuspiciousTransactionChartProps {
+	transactions: Transaction[];
 }
 
 export default function SuspiciousTransactionChart({
 	transactions,
 }: SuspiciousTransactionChartProps) {
-	const data = transactions.map((tx) => ({
+	const data: ChartPoint[] = transactions.map((tx) => ({
 		time: toHourDecimal(tx.timestamp),
+		timeLabel: formatTimeLabel(tx.timestamp),
+		timestamp: tx.timestamp,
 		amount: tx.amount,
+		currency: normalizeCurrency(tx.currency),
 		type: tx.isFraud || tx.fraudTag ? "suspicious" : "normal",
 	}));
 
 	const suspiciousCount = data.filter(
 		(item) => item.type === "suspicious",
 	).length;
+
 	return (
 		<div className="w-full">
 			<ResponsiveContainer width="100%" minHeight={400}>
@@ -49,6 +102,7 @@ export default function SuspiciousTransactionChart({
 						name="Time (24h)"
 						stroke="#6b7280"
 						domain={[0, 24]}
+						tickFormatter={(value) => formatHourDecimalLabel(Number(value))}
 						label={{
 							value: "Time of Day (24h)",
 							position: "insideBottomRight",
@@ -58,10 +112,10 @@ export default function SuspiciousTransactionChart({
 					<YAxis
 						type="number"
 						dataKey="amount"
-						name="Amount ($)"
+						name="Amount"
 						stroke="#6b7280"
 						label={{
-							value: "Transaction Amount ($)",
+							value: "Transaction Amount",
 							angle: -90,
 							position: "insideLeft",
 						}}
@@ -73,10 +127,7 @@ export default function SuspiciousTransactionChart({
 							border: "1px solid #e8e6e1",
 							borderRadius: "4px",
 						}}
-						formatter={(value, name) => {
-							if (name === "amount") return `$${value}`;
-							return value;
-						}}
+						content={<CustomTooltip />}
 					/>
 					<Scatter
 						name="Suspicious Transactions"

@@ -1,5 +1,3 @@
-"use client";
-
 export default function ImpossibleTravelMap() {
 	return (
 		<div className="w-full rounded border border-border bg-card p-6 shadow-sm">

@@ -1,6 +1,6 @@
 "use client";
 
-import { use, type Usable } from "react";
+import { use } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
@@ -13,6 +13,7 @@ import EnforcementActions from "@/components/cases/enforcement-actions";
 import AuditTrail from "@/components/cases/audit-trail";
 
 import { useCaseDetail } from "@/hooks/use-case-detail.hook";
+import { formatDateTime } from "@/utils/date.util";
 
 export default function CaseDetailPage({
 	params,
@@ -59,9 +60,34 @@ export default function CaseDetailPage({
 	const summary = caseData.case?.summary ?? "";
 	const confidence = caseData.case?.confidence ?? 0;
 	const recommendedAction = caseData.case?.recommendedAction ?? "";
+	const evidenceCount = caseData.alert.evidenceTxIds.length;
+	const fraudTags = Array.from(
+		new Set(
+			caseData.transactions
+				.map((tx) => tx.fraudTag)
+				.filter((tag): tag is string => Boolean(tag)),
+		),
+	);
+	const currencies = Array.from(
+		new Set(caseData.transactions.map((tx) => tx.currency)),
+	);
+	const devices = Array.from(
+		new Set(
+			caseData.transactions
+				.map((tx) => tx.meta?.device)
+				.filter((device): device is string => Boolean(device)),
+		),
+	);
+	const locations = Array.from(
+		new Set(
+			caseData.transactions
+				.map((tx) => tx.meta?.location)
+				.filter((location): location is string => Boolean(location)),
+		),
+	);
 
 	return (
-		<div className="min-h-screen bg-background">
+		<main className="min-h-screen bg-background">
 			{/* Header */}
 			<header className="border-b border-border bg-card">
 				<div className="px-6 py-4">
@@ -115,44 +141,71 @@ export default function CaseDetailPage({
 							<p className="text-sm text-muted-foreground mb-6">
 								Visual representation of linked accounts and transactions
 							</p>
-							<FraudRingNetwork />
+							<FraudRingNetwork alertId={caseData.alert._id} />
 						</div>
 
-						{/* Transaction Timeline */}
+						{/* Account & Evidence Summary */}
 						<div className="bg-card rounded border border-border p-6 shadow-sm">
-							<h2 className="text-lg font-semibold text-foreground mb-4">
-								Transaction Timeline
-							</h2>
-							<div className="space-y-3">
-								{transactionTimeline.map((tx, idx) => (
-									<div
-										key={idx}
-										className={`p-3 rounded border ${
-											tx.highlight
-												? "bg-destructive/10 border-destructive/30"
-												: "bg-muted/30 border-border"
-										}`}
-									>
-										<div className="flex items-start justify-between">
-											<div>
-												<p className="font-semibold text-foreground">
-													{tx.time}
-												</p>
-												<p className="text-xs text-muted-foreground">
-													{tx.type}
-												</p>
-											</div>
-											<div className="text-right">
-												<p className="font-semibold text-foreground">
-													{tx.amount}
-												</p>
-												<p className="text-xs text-muted-foreground">
-													{tx.note}
-												</p>
-											</div>
-										</div>
-									</div>
-								))}
+							<div className="flex items-start justify-between mb-4">
+								<h2 className="text-lg font-semibold text-foreground">
+									Account & Evidence Summary
+								</h2>
+								<div className="text-xs text-muted-foreground">
+									Last updated: {formatDateTime(caseData.alert.createdAt)}
+								</div>
+							</div>
+							<div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+								<div className="rounded border border-border bg-muted/20 p-4">
+									<p className="text-xs text-muted-foreground">Account</p>
+									<p className="font-semibold text-foreground">
+										{caseData.user?.name ?? "Unknown"}
+									</p>
+									<p className="text-xs text-muted-foreground mt-2">
+										Type: {caseData.user?.accountType ?? "N/A"}
+									</p>
+									<p className="text-xs text-muted-foreground">
+										Status: {caseData.user?.status ?? "N/A"}
+									</p>
+									<p className="text-xs text-muted-foreground">
+										Wallet: {caseData.user?.walletAddress ?? "N/A"}
+									</p>
+									<p className="text-xs text-muted-foreground">
+										Last login IP: {caseData.user?.lastLoginIp ?? "N/A"}
+									</p>
+								</div>
+								<div className="rounded border border-border bg-muted/20 p-4">
+									<p className="text-xs text-muted-foreground">Alert</p>
+									<p className="font-semibold text-foreground">
+										{caseData.alert.trigger}
+									</p>
+									<p className="text-xs text-muted-foreground mt-2">
+										Status: {caseData.alert.status}
+									</p>
+									<p className="text-xs text-muted-foreground">
+										Evidence tx: {evidenceCount}
+									</p>
+									<p className="text-xs text-muted-foreground">
+										Currencies: {currencies.join(", ") || "N/A"}
+									</p>
+									<p className="text-xs text-muted-foreground">
+										Fraud tags: {fraudTags.join(", ") || "None"}
+									</p>
+								</div>
+								<div className="rounded border border-border bg-muted/20 p-4">
+									<p className="text-xs text-muted-foreground">Environment</p>
+									<p className="font-semibold text-foreground">
+										{caseData.user?.rawProfile?.country ?? "Unknown"}
+									</p>
+									<p className="text-xs text-muted-foreground mt-2">
+										Primary device: {caseData.user?.rawProfile?.device ?? "N/A"}
+									</p>
+									<p className="text-xs text-muted-foreground">
+										Observed devices: {devices.join(", ") || "N/A"}
+									</p>
+									<p className="text-xs text-muted-foreground">
+										Locations: {locations.join(", ") || "N/A"}
+									</p>
+								</div>
 							</div>
 						</div>
 					</div>
@@ -172,6 +225,6 @@ export default function CaseDetailPage({
 					</div>
 				</div>
 			</main>
-		</div>
+		</main>
 	);
 }
