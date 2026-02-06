@@ -8,7 +8,14 @@
  * @module
  */
 
-import type * as tasks from "../tasks.js";
+import type * as actions from "../actions.js";
+import type * as ai_config from "../ai_config.js";
+import type * as alerts from "../alerts.js";
+import type * as cases from "../cases.js";
+import type * as cases_actions from "../cases_actions.js";
+import type * as embed from "../embed.js";
+import type * as embed_actions from "../embed_actions.js";
+import type * as seed from "../seed.js";
 
 import type {
   ApiFromModules,
@@ -17,7 +24,14 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  tasks: typeof tasks;
+  actions: typeof actions;
+  ai_config: typeof ai_config;
+  alerts: typeof alerts;
+  cases: typeof cases;
+  cases_actions: typeof cases_actions;
+  embed: typeof embed;
+  embed_actions: typeof embed_actions;
+  seed: typeof seed;
 }>;
 
 /**
