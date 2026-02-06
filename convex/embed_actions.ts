@@ -12,6 +12,7 @@ export const generateAndSaveEvidence = action({
 		text: v.string(),
 		caseId: v.optional(v.id("cases")),
 		source: v.string(),
+		entityId: v.optional(v.id("entities")),
 	},
 	handler: async (ctx, args) => {
 		const { embedding } = await embed({
@@ -30,6 +31,7 @@ export const generateAndSaveEvidence = action({
 			embedding: embedding,
 			caseId: args.caseId,
 			source: args.source,
+			...(args.entityId ? { entityId: args.entityId } : {}),
 		});
 	},
 });

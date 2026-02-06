@@ -3,6 +3,12 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { formatAuditTimestamp, formatDateTime } from "@/utils/date.util";
+import {
+	formatCurrencyWithCode,
+	getCurrencyFromWalletAddress,
+	normalizeCurrency,
+} from "@/utils/currency.util";
 
 const EMBEDDING_ACTIONS = new Set(["FREEZE ACCOUNT", "HOLD & REVIEW"]);
 
@@ -29,6 +35,9 @@ type AuditLog = {
 export function useCaseDetail(alertId: string) {
 	const parsedAlertId = alertId as Id<"alerts">;
 	const caseData = useQuery(api.cases.getCaseDetailByAlertId, {
+		alertId: parsedAlertId,
+	});
+	const fraudNetwork = useQuery(api.cases.getFraudRingNetworkByAlertId, {
 		alertId: parsedAlertId,
 	});
 
@@ -61,15 +70,7 @@ export function useCaseDetail(alertId: string) {
 
 		return caseData.actions.map((action) => {
 			return {
-				timestamp: new Date(action.executedAt).toLocaleString("en-US", {
-					year: "numeric",
-					month: "2-digit",
-					day: "2-digit",
-					hour: "2-digit",
-					minute: "2-digit",
-					second: "2-digit",
-					hour12: false,
-				}),
+				timestamp: formatAuditTimestamp(action.executedAt),
 				action: action.type,
 				actor: action.executedBy,
 				justification: action.notes ?? "Automated enforcement action",
@@ -79,15 +80,15 @@ export function useCaseDetail(alertId: string) {
 
 	const transactionTimeline = useMemo<TransactionTimelineItem[]>(() => {
 		if (!caseData?.transactions) return [];
+		const walletCurrency = getCurrencyFromWalletAddress(
+			caseData.user?.walletAddress ?? null,
+		);
 
 		return [...caseData.transactions]
 			.sort((a, b) => b.timestamp - a.timestamp)
 			.map((tx) => {
-				const timestamp = new Date(tx.timestamp);
-				const time = timestamp.toLocaleTimeString("en-US", {
-					hour: "2-digit",
-					minute: "2-digit",
-				});
+				const time = formatDateTime(tx.timestamp);
+				const currency = normalizeCurrency(tx.currency ?? walletCurrency);
 				const highlight = Boolean(tx.isFraud || tx.fraudTag);
 				const note = tx.fraudTag
 					? `Suspicious: ${tx.fraudTag}`
@@ -97,13 +98,13 @@ export function useCaseDetail(alertId: string) {
 
 				return {
 					time,
-					amount: `$${tx.amount.toFixed(2)}`,
+					amount: formatCurrencyWithCode(tx.amount, currency),
 					type: tx.type,
 					note,
 					highlight,
 				};
 			});
-	}, [caseData?.transactions]);
+	}, [caseData?.transactions, caseData?.user?.walletAddress]);
 
 	const reportTimeline = useMemo<TimelineItem[]>(() => {
 		const timeline = caseData?.case?.timeline;
@@ -154,14 +155,18 @@ export function useCaseDetail(alertId: string) {
 
 			if (EMBEDDING_ACTIONS.has(actionName)) {
 				const text = `Enforcement action executed: ${actionName}. User: ${caseData.user.name}. Alert: ${caseData.alert._id}. Risk score: ${caseData.alert.riskScore}.`;
+				const entityId = fraudNetwork?.nodes.find(
+					(node) => node.type === "shared" && node.entityId,
+				)?.entityId;
 				await generateAndSaveEvidence({
 					text,
 					caseId: caseData.case._id,
 					source: "Enforcement Action",
+					...(entityId ? { entityId } : {}),
 				});
 			}
 		},
-		[caseData, createEnforcementAction, generateAndSaveEvidence],
+		[caseData, createEnforcementAction, generateAndSaveEvidence, fraudNetwork],
 	);
 
 	return {

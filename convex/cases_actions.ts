@@ -37,6 +37,54 @@ type InvestigationData = {
 	transactions: Doc<"transactions">[];
 };
 
+type Currency = "BTC" | "ETH" | "USD" | "EUR";
+
+const WALLET_PREFIXES: Array<{ prefix: string; currency: Currency }> = [
+	{ prefix: "0x", currency: "ETH" },
+	{ prefix: "bc1", currency: "BTC" },
+	{ prefix: "1", currency: "BTC" },
+	{ prefix: "3", currency: "BTC" },
+];
+
+function normalizeCurrency(value: string | null | undefined): Currency {
+	if (!value) return "USD";
+	const upper = value.toUpperCase();
+	if (
+		upper === "BTC" ||
+		upper === "ETH" ||
+		upper === "USD" ||
+		upper === "EUR"
+	) {
+		return upper as Currency;
+	}
+	return "USD";
+}
+
+function getCurrencyFromWalletAddress(walletAddress: string | null): Currency {
+	if (!walletAddress) return "USD";
+	const trimmed = walletAddress.trim().toLowerCase();
+	const match = WALLET_PREFIXES.find((entry) =>
+		trimmed.startsWith(entry.prefix),
+	);
+	return match?.currency ?? "USD";
+}
+
+function formatAmount(amount: number, currency: Currency) {
+	if (currency === "BTC" || currency === "ETH") {
+		return new Intl.NumberFormat("en-US", {
+			style: "decimal",
+			minimumFractionDigits: 2,
+			maximumFractionDigits: 8,
+		}).format(amount);
+	}
+
+	return new Intl.NumberFormat("en-US", {
+		style: "currency",
+		currency,
+		minimumFractionDigits: 2,
+	}).format(amount);
+}
+
 export const analyzeAlert = action({
 	args: { alertId: v.id("alerts") },
 	handler: async (ctx, args): Promise<CaseAnalysis> => {
@@ -49,27 +97,50 @@ export const analyzeAlert = action({
 
 		if (!data) throw new Error("Alert data not found");
 		if (!data.user) throw new Error("Alert user not found");
+		const alertCurrency = getCurrencyFromWalletAddress(data.user.walletAddress);
+		const formattedAlertAmount = formatAmount(data.alert.amount, alertCurrency);
+		const formattedTransactions = data.transactions.map((tx) => {
+			const txCurrency = normalizeCurrency(tx.currency);
+			return {
+				...tx,
+				timestampISO: new Date(tx.timestamp).toISOString(),
+				amountFormatted: `${formatAmount(tx.amount, txCurrency)} ${txCurrency}`,
+			};
+		});
 
 		console.log(`AI Analyzing Alert for User: ${data.user.name}...`);
 
 		const { output }: { output: CaseAnalysis } = await generateText({
 			model: mainModel,
+			temperature: 0.2,
 			output: Output.object({
 				schema: CaseAnalysisSchema,
 			}),
 			prompt: `
             ROLE: Senior Financial Crime Investigator.
 
-            TASK: Analyze the following suspicious activity report and determine the risk.
+            OBJECTIVE:
+			Determine whether this alert indicates coordinated fraud,
+			account takeover, structuring, or benign behavior.
 
-            CONTEXT DATA:
-			User: ${JSON.stringify(data.user)}
+			Return structured analysis only.
+
+			ALERT:
 			Trigger: ${data.alert.trigger}
-			Suspicious Transactions: ${JSON.stringify(data.transactions)}
-
-            INSTRUCTIONS:
-            - Look for patterns like Structuring (smurfing), Rapid Drain, or weird IP usage.
-            - Be professional and concise.`,
+			RiskScore: ${data.alert.riskScore}
+			Amount: ${formattedAlertAmount} (${alertCurrency})
+			WalletCurrency: ${alertCurrency}
+					
+			TRANSACTIONS (sample):
+			${JSON.stringify(formattedTransactions)}
+					
+			INSTRUCTIONS:
+			- Identify concrete fraud patterns.
+			- Reference transaction behavior.
+			- Keep summary under 120 words.
+			- Timeline must be chronological.
+			- Timeline time MUST exactly match a transaction timestampISO from the list.
+			- recommendedAction must reflect risk severity.`,
 		});
 
 		await ctx.runMutation(internal.cases.createCaseFromAnalysis, {
