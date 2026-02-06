@@ -2,6 +2,7 @@ import { useCallback, useMemo } from "react";
 import { useQuery } from "convex/react";
 
 import { api } from "@/convex/_generated/api";
+import { formatTimeLabel } from "@/utils/date.util";
 
 type ChartDataPoint = {
 	time: string;
@@ -12,14 +13,6 @@ type TopRiskAccount = {
 	label: string;
 	score: number;
 };
-
-function formatTimeLabel(timestamp: number) {
-	const date = new Date(timestamp);
-	const hours = `${date.getHours()}`.padStart(2, "0");
-	const minutes = `${date.getMinutes()}`.padStart(2, "0");
-
-	return `${hours}:${minutes}`;
-}
 
 function buildChartData(alerts: { createdAt: number; riskScore: number }[]) {
 	const bucketMinutes = 5;
