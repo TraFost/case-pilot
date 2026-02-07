@@ -1,13 +1,13 @@
 "use node";
 
-import { generateText, Output } from "ai";
+import { embed, generateText, Output } from "ai";
 import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { z } from "zod";
 
-import { mainModel } from "./ai_config";
+import { embeddingModel, mainModel } from "./ai_config";
 
 const CaseAnalysisSchema = z.object({
 	summary: z
@@ -37,7 +37,22 @@ type InvestigationData = {
 	transactions: Doc<"transactions">[];
 };
 
+type SimilarCaseMatch = {
+	caseId: Doc<"cases">["_id"];
+	caseSummary: string;
+	caseStatus: string;
+	userName: string;
+	outcome: string;
+	outcomeNotes: string | null;
+	similarity: number;
+	evidenceText: string;
+};
+
 type Currency = "BTC" | "ETH" | "USD" | "EUR";
+
+function isDefined<T>(value: T | null | undefined): value is T {
+	return value !== null && value !== undefined;
+}
 
 const WALLET_PREFIXES: Array<{ prefix: string; currency: Currency }> = [
 	{ prefix: "0x", currency: "ETH" },
@@ -150,5 +165,111 @@ export const analyzeAlert = action({
 		});
 
 		return output;
+	},
+});
+
+export const findSimilarCases = action({
+	args: { caseId: v.id("cases") },
+	handler: async (ctx, args): Promise<SimilarCaseMatch[]> => {
+		const currentCase = await ctx.runQuery(internal.cases.getCaseById, {
+			caseId: args.caseId,
+		});
+		if (!currentCase?.summary) return [];
+
+		let embedding: number[];
+		try {
+			const result = await embed({
+				model: embeddingModel,
+				value: currentCase.summary,
+			});
+			embedding = result.embedding;
+		} catch (error) {
+			console.error("Similar case embedding failed", error);
+			return [];
+		}
+
+		if (embedding.length !== 1024) {
+			console.error(
+				`WARNING: Embedding dimension mismatch! Got ${embedding.length}, expected 1024.`,
+			);
+		}
+
+		const results = await ctx.vectorSearch("evidence", "by_embedding", {
+			vector: embedding,
+			limit: 5,
+		});
+
+		if (!results.length) return [];
+
+		const evidenceIds = results.map((result) => result._id);
+		const evidencesRaw = await ctx.runQuery(
+			internal.evidence.fetchEvidenceByIds,
+			{
+				ids: evidenceIds,
+			},
+		);
+		const evidences = evidencesRaw.filter(isDefined);
+		const filteredEvidences = evidences.filter(
+			(doc): doc is Doc<"evidence"> & { caseId: Doc<"cases">["_id"] } =>
+				Boolean(doc.caseId) && doc.caseId !== args.caseId,
+		);
+
+		if (!filteredEvidences.length) return [];
+
+		const evidenceMap = new Map(filteredEvidences.map((doc) => [doc._id, doc]));
+		const relatedCaseIds = Array.from(
+			new Set(filteredEvidences.map((doc) => doc.caseId)),
+		);
+
+		const relatedCases: Doc<"cases">[] = relatedCaseIds.length
+			? await ctx.runQuery(internal.cases.getCasesByIds, {
+					ids: relatedCaseIds,
+				})
+			: [];
+		const caseMap = new Map(relatedCases.map((doc) => [doc._id, doc]));
+
+		const relatedUserIds = Array.from(
+			new Set(relatedCases.map((doc) => doc.userId)),
+		);
+		const relatedUsersRaw = relatedUserIds.length
+			? await ctx.runQuery(internal.users.getUsersByIds, {
+					ids: relatedUserIds,
+				})
+			: [];
+		const relatedUsers = relatedUsersRaw.filter(isDefined);
+		const userMap = new Map(relatedUsers.map((user) => [user._id, user]));
+
+		const actionLookups = await Promise.all(
+			relatedCaseIds.map(async (caseId) => {
+				const action = await ctx.runQuery(
+					internal.actions.getLatestActionByCaseId,
+					{ caseId },
+				);
+				return [caseId, action] as const;
+			}),
+		);
+		const actionMap = new Map(actionLookups);
+
+		return results
+			.map((result): SimilarCaseMatch | null => {
+				const evidence = evidenceMap.get(result._id);
+				if (!evidence?.caseId) return null;
+				const relatedCase = caseMap.get(evidence.caseId);
+				if (!relatedCase) return null;
+				const relatedUser = userMap.get(relatedCase.userId);
+				const latestAction = actionMap.get(relatedCase._id);
+
+				return {
+					caseId: relatedCase._id,
+					caseSummary: relatedCase.summary,
+					caseStatus: relatedCase.status,
+					userName: relatedUser?.name ?? "Unknown",
+					outcome: latestAction?.type ?? "Unknown",
+					outcomeNotes: latestAction?.notes ?? null,
+					similarity: Math.round(result._score * 100),
+					evidenceText: evidence.text,
+				};
+			})
+			.filter((item): item is SimilarCaseMatch => Boolean(item));
 	},
 });

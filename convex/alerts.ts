@@ -46,7 +46,7 @@ export const getAllTasks = query({
 	handler: async (ctx) => {
 		const alerts = await ctx.db
 			.query("alerts")
-			.withIndex("by_riskScore")
+			.withIndex("by_created")
 			.order("desc")
 			.collect();
 
@@ -78,8 +78,7 @@ export const insertAttackAlert = mutation({
 	handler: async (ctx, args) => {
 		const user = await ctx.db.get(args.userId);
 		if (!user) return null;
-		const createdAt =
-			Math.max(Date.now(), args.createdAt) + Math.floor(Math.random() * 500);
+		const createdAt = args.createdAt + Math.floor(Math.random() * 500);
 
 		const fraudTxCount = 2 + Math.floor(Math.random() * 2);
 		const evidenceTxIds: Id<"transactions">[] = [];
@@ -162,6 +161,7 @@ export const injectAttack = mutation({
 		if (!users.length) return { scheduled: 0 };
 
 		const now = Date.now();
+		const thirtyMinutesMs = 30 * 60 * 1000;
 		const sharedIp = `203.0.113.${Math.floor(Math.random() * 200) + 1}`;
 		const sharedWallet = `0x${randomHex(20)}`;
 		const sharedDevice = `${pickRandom(ATTACK_DEVICES)}::${randomHex(8)}`;
@@ -192,7 +192,7 @@ export const injectAttack = mutation({
 
 		for (let i = 0; i < alertCount; i += 1) {
 			const user = users[Math.floor(Math.random() * users.length)];
-			const createdAt = now + delays[i];
+			const createdAt = now - Math.floor(Math.random() * thirtyMinutesMs);
 			await ctx.scheduler.runAfter(delays[i], api.alerts.insertAttackAlert, {
 				userId: user._id,
 				createdAt,

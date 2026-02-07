@@ -83,7 +83,7 @@ export default function RiskOverviewPanel({
 				</p>
 			</div>
 
-			<div className="bg-card rounded border border-border p-6 shadow-sm border-destructive/20 bg-destructive/5">
+			<div className="rounded border border-destructive/20 bg-destructive/5 p-6 shadow-sm">
 				<div className="flex items-start justify-between">
 					<div>
 						<p className="text-sm text-muted-foreground mb-1">
@@ -100,7 +100,7 @@ export default function RiskOverviewPanel({
 				</p>
 			</div>
 
-			<div className="bg-card rounded border border-border p-6 shadow-sm border-primary/20 bg-primary/5">
+			<div className="rounded border border-primary/20 bg-primary/5 p-6 shadow-sm">
 				<div className="flex items-start justify-between">
 					<div>
 						<p className="text-sm text-muted-foreground mb-1">

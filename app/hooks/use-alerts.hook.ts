@@ -9,12 +9,15 @@ type ChartDataPoint = {
 	riskScore: number;
 };
 
-function buildChartData(alerts: { createdAt: number; riskScore: number }[]) {
+function buildChartData(
+	alerts: { createdAt: number; riskScore: number }[],
+	nowMs: number,
+) {
 	const bucketMinutes = 5;
 	const bucketCount = 6;
 	const bucketMs = bucketMinutes * 60 * 1000;
 
-	const now = Date.now();
+	const now = nowMs;
 	const points: ChartDataPoint[] = [];
 
 	for (let i = bucketCount - 1; i >= 0; i -= 1) {
@@ -37,10 +40,13 @@ function buildChartData(alerts: { createdAt: number; riskScore: number }[]) {
 }
 
 export function useAlerts() {
-	const alerts = useQuery(api.alerts.getAllTasks) ?? [];
+	const alertsQuery = useQuery(api.alerts.getAllTasks);
+	const isLoading = alertsQuery === undefined;
+	const alerts = alertsQuery ?? [];
 	const injectAttack = useMutation(api.alerts.injectAttack);
 	const [attackBurstUntil, setAttackBurstUntil] = useState<number | null>(null);
 	const burstTimeoutRef = useRef<number | null>(null);
+	const [nowTick, setNowTick] = useState(() => Date.now());
 
 	const highRiskAlerts = useMemo(
 		() => alerts.filter((alert) => alert.riskScore >= 85) ?? [],
@@ -52,13 +58,21 @@ export function useAlerts() {
 		[alerts],
 	);
 
-	const chartData = useMemo(() => buildChartData(alerts), [alerts]);
+	const chartData = useMemo(
+		() => buildChartData(alerts, nowTick),
+		[alerts, nowTick],
+	);
 
 	const isAttackMode =
 		attackBurstUntil !== null && Date.now() < attackBurstUntil;
 
 	useEffect(() => {
+		const timer = window.setInterval(() => {
+			setNowTick(Date.now());
+		}, 10000);
+
 		return () => {
+			window.clearInterval(timer);
 			if (burstTimeoutRef.current !== null) {
 				window.clearTimeout(burstTimeoutRef.current);
 			}
@@ -87,5 +101,6 @@ export function useAlerts() {
 		linkedRingsCount: linkedRings,
 		isAttackMode,
 		onInjectAttack,
+		isLoading,
 	};
 }
