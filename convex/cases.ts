@@ -22,6 +22,52 @@ export const gatherInvestigationData = internalQuery({
 	},
 });
 
+export const getCaseContextById = internalQuery({
+	args: { caseId: v.id("cases") },
+	handler: async (ctx, args) => {
+		const caseDoc = await ctx.db.get(args.caseId);
+		if (!caseDoc) return null;
+		const alert = await ctx.db.get(caseDoc.alertId);
+		if (!alert) return null;
+		const [user] = await getAll(ctx.db, [caseDoc.userId]);
+		const transactions = (await getAll(ctx.db, alert.evidenceTxIds)).filter(
+			isDefined,
+		);
+
+		return {
+			case: caseDoc,
+			alert,
+			user: user ?? null,
+			transactions,
+		};
+	},
+});
+
+export const getCaseById = internalQuery({
+	args: { caseId: v.id("cases") },
+	handler: async (ctx, args) => {
+		return await ctx.db.get(args.caseId);
+	},
+});
+
+export const getCaseIdByAlertId = internalQuery({
+	args: { alertId: v.id("alerts") },
+	handler: async (ctx, args) => {
+		const caseDocs = await ctx.db
+			.query("cases")
+			.withIndex("by_alert", (q) => q.eq("alertId", args.alertId))
+			.collect();
+		return caseDocs[0]?._id ?? null;
+	},
+});
+
+export const getCasesByIds = internalQuery({
+	args: { ids: v.array(v.id("cases")) },
+	handler: async (ctx, args) => {
+		return (await getAll(ctx.db, args.ids)).filter(isDefined);
+	},
+});
+
 export const getCaseDetailByAlertId = query({
 	args: { alertId: v.id("alerts") },
 	handler: async (ctx, args) => {

@@ -13,9 +13,13 @@ import type * as ai_config from "../ai_config.js";
 import type * as alerts from "../alerts.js";
 import type * as cases from "../cases.js";
 import type * as cases_actions from "../cases_actions.js";
+import type * as chat from "../chat.js";
 import type * as embed from "../embed.js";
 import type * as embed_actions from "../embed_actions.js";
+import type * as evidence from "../evidence.js";
+import type * as sar from "../sar.js";
 import type * as seed from "../seed.js";
+import type * as users from "../users.js";
 
 import type {
   ApiFromModules,
@@ -29,9 +33,13 @@ declare const fullApi: ApiFromModules<{
   alerts: typeof alerts;
   cases: typeof cases;
   cases_actions: typeof cases_actions;
+  chat: typeof chat;
   embed: typeof embed;
   embed_actions: typeof embed_actions;
+  evidence: typeof evidence;
+  sar: typeof sar;
   seed: typeof seed;
+  users: typeof users;
 }>;
 
 /**

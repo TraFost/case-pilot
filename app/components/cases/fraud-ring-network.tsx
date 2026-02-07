@@ -1,7 +1,4 @@
-"use client";
-
-import { useEffect, useMemo } from "react";
-import dagre from "dagre";
+import { useEffect } from "react";
 import {
 	ReactFlow,
 	Background,
@@ -9,24 +6,26 @@ import {
 	MiniMap,
 	useNodesState,
 	useEdgesState,
-	MarkerType,
 	Handle,
 	Position,
 	type Node,
 	type Edge,
+	useReactFlow,
+	ReactFlowProvider,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useQuery } from "convex/react";
+import {
+	forceSimulation,
+	forceLink,
+	forceManyBody,
+	forceCenter,
+	forceCollide,
+	type SimulationNodeDatum,
+} from "d3-force";
 
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-
-const nodeWidth = 120;
-const nodeHeight = 90;
-
-interface FraudRingNetworkProps {
-	alertId: Id<"alerts">;
-}
 
 type FraudNodeData = {
 	label: string;
@@ -36,112 +35,124 @@ type FraudNodeData = {
 type GraphNode = Node<FraudNodeData>;
 type GraphEdge = Edge;
 
-function layoutGraph(nodes: GraphNode[], edges: GraphEdge[]) {
-	const g = new dagre.graphlib.Graph();
-	g.setDefaultEdgeLabel(() => ({}));
-	g.setGraph({
-		rankdir: "TB", // top -> bottom
-		nodesep: 80,
-		ranksep: 120,
-		marginx: 20,
-		marginy: 20,
-	});
+type SimulationNode = SimulationNodeDatum & {
+	id: string;
+	x?: number | null;
+	y?: number | null;
+};
 
-	nodes.forEach((n) => {
-		g.setNode(n.id, { width: nodeWidth, height: nodeHeight });
-	});
-
-	edges.forEach((e) => {
-		g.setEdge(e.source, e.target);
-	});
-
-	dagre.layout(g);
-
-	return nodes.map((n) => {
-		const pos = g.node(n.id);
-		return {
-			...n,
-			position: {
-				x: pos.x - nodeWidth / 2,
-				y: pos.y - nodeHeight / 2,
-			},
-			sourcePosition: Position.Bottom,
-			targetPosition: Position.Top,
-		};
-	});
-}
+type SimulationEdge = {
+	source: string | SimulationNode;
+	target: string | SimulationNode;
+};
 
 const FraudNode = ({ data }: { data: FraudNodeData }) => {
 	const isSuspect = data.type === "suspect";
 	const isShared = data.type === "shared";
 
+	const sizeClass = isShared ? "w-16 h-16 text-lg" : "w-12 h-12 text-md";
 	const bgColor = isSuspect
-		? "bg-red-600"
+		? "bg-red-600 shadow-red-500/50"
 		: isShared
-			? "bg-yellow-500"
-			: "bg-gray-400";
+			? "bg-amber-500 shadow-amber-500/50"
+			: "bg-slate-500 shadow-slate-500/50";
 
 	return (
-		<div className="relative flex flex-col items-center">
-			<Handle type="target" position={Position.Top} />
+		<div className="relative flex flex-col items-center group">
+			<Handle type="target" position={Position.Top} className="opacity-0" />
+			<Handle type="source" position={Position.Bottom} className="opacity-0" />
 
 			<div
-				className={`w-14 h-14 rounded-full flex items-center justify-center text-white font-bold shadow-lg ${bgColor} bg-opacity-90 border-2 border-white`}
+				className={`${sizeClass} rounded-full flex items-center justify-center text-white font-bold shadow-xl ${bgColor} border-2 border-white transition-transform duration-200 group-hover:scale-110`}
 			>
-				{data.label.substring(0, 1)}
+				{data.type === "shared" ? "⚠️" : data.label.substring(0, 1)}
 			</div>
 
-			<div className="mt-2 text-xs font-bold text-gray-600 bg-white px-2 py-0.5 rounded shadow-sm border">
+			<div className="absolute top-full mt-2 whitespace-nowrap px-3 py-1 bg-white/90 backdrop-blur border border-slate-200 rounded-full text-[10px] font-bold text-slate-700 shadow-sm z-10">
 				{data.label}
 			</div>
-
-			<Handle type="source" position={Position.Bottom} />
 		</div>
 	);
 };
 
 const nodeTypes = { fraudNode: FraudNode };
 
-export default function FraudRingNetwork({ alertId }: FraudRingNetworkProps) {
-	const network = useQuery(api.cases.getFraudRingNetworkByAlertId, {
-		alertId,
-	});
+const runForceLayout = (nodes: GraphNode[], edges: GraphEdge[]) => {
+	const simulationNodes: SimulationNode[] = nodes.map((node) => ({
+		id: node.id,
+		x: node.position.x,
+		y: node.position.y,
+	}));
+	const simulationEdges: SimulationEdge[] = edges.map((edge) => ({
+		source: edge.source,
+		target: edge.target,
+	}));
 
-	console.log(network, "<<network");
+	const simulation = forceSimulation<SimulationNode>(simulationNodes)
+		.force("charge", forceManyBody().strength(-500))
+		.force(
+			"link",
+			forceLink<SimulationNode, SimulationEdge>(simulationEdges)
+				.id((d) => d.id)
+				.distance(150),
+		)
+		.force("center", forceCenter(400, 300))
+		.force("collide", forceCollide().radius(60))
+		.stop();
 
-	const layouted = useMemo(() => {
-		if (!network) return null;
-		const nodes: GraphNode[] = network.nodes.map((node) => ({
-			id: node.id,
-			type: "fraudNode",
-			data: {
-				label: node.label,
-				type: node.type,
-			},
-			position: { x: 0, y: 0 },
-		}));
-		const edges: GraphEdge[] = network.edges.map((edge) => ({
-			...edge,
-			type: "smoothstep",
-			animated: true,
-			style: { stroke: "#c73e3a", strokeWidth: 1.6 },
-			markerEnd: { type: MarkerType.ArrowClosed, color: "#c73e3a" },
-		}));
+	simulation.tick(300);
 
-		return { nodes: layoutGraph(nodes, edges), edges };
-	}, [network]);
+	return {
+		nodes: nodes.map((node) => {
+			const simNode = simulationNodes.find((item) => item.id === node.id);
+			return {
+				...node,
+				position: { x: simNode?.x ?? 0, y: simNode?.y ?? 0 },
+			};
+		}),
+		edges,
+	};
+};
 
+interface FraudRingNetworkProps {
+	alertId: Id<"alerts">;
+}
+
+function FraudRingNetworkContent({ alertId }: FraudRingNetworkProps) {
+	const network = useQuery(api.cases.getFraudRingNetworkByAlertId, { alertId });
 	const [nodes, setNodes, onNodesChange] = useNodesState<GraphNode>([]);
 	const [edges, setEdges, onEdgesChange] = useEdgesState<GraphEdge>([]);
+	const { fitView } = useReactFlow();
 
 	useEffect(() => {
-		if (!layouted) return;
-		setNodes(layouted.nodes);
-		setEdges(layouted.edges);
-	}, [layouted, setNodes, setEdges]);
+		if (!network) return;
+
+		const initialNodes: GraphNode[] = network.nodes.map((node) => ({
+			id: node.id,
+			type: "fraudNode",
+			data: { label: node.label, type: node.type },
+			position: { x: 0, y: 0 },
+		}));
+		const initialEdges: GraphEdge[] = network.edges.map((edge) => ({
+			id: edge.id,
+			source: edge.source,
+			target: edge.target,
+			animated: true,
+			style: { stroke: "#94a3b8", strokeWidth: 1.5, strokeDasharray: "5 5" },
+		}));
+
+		const layout = runForceLayout(initialNodes, initialEdges);
+		setNodes(layout.nodes);
+		setEdges(layout.edges);
+
+		setTimeout(
+			() => window.requestAnimationFrame(() => fitView({ padding: 0.2 })),
+			100,
+		);
+	}, [network, setNodes, setEdges, fitView]);
 
 	return (
-		<div className="w-full h-140 bg-slate-50 border rounded-xl overflow-hidden relative">
+		<div className="w-full h-125 bg-slate-50/50 border rounded-xl overflow-hidden relative group">
 			<ReactFlow
 				nodes={nodes}
 				edges={edges}
@@ -149,42 +160,55 @@ export default function FraudRingNetwork({ alertId }: FraudRingNetworkProps) {
 				onNodesChange={onNodesChange}
 				onEdgesChange={onEdgesChange}
 				fitView
-				nodesDraggable={false}
-				nodesConnectable={false}
-				elementsSelectable={false}
-				defaultEdgeOptions={{
-					type: "smoothstep",
-					animated: true,
-				}}
+				minZoom={0.5}
+				maxZoom={2}
+				proOptions={{ hideAttribution: true }}
 			>
-				<Background gap={12} size={1} />
-				<Controls />
-				<MiniMap pannable zoomable />
+				<Background color="#cbd5e1" gap={20} size={1} />
+				<Controls
+					showInteractive={false}
+					className="bg-white shadow-md border-none"
+				/>
+				<MiniMap
+					nodeColor={(n) => {
+						if (n.data.type === "suspect") return "#dc2626";
+						if (n.data.type === "shared") return "#f59e0b";
+						return "#94a3b8";
+					}}
+					className="rounded-lg border shadow-sm"
+				/>
 			</ReactFlow>
 
-			{network === null && (
-				<div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground bg-white/70">
-					No linked entities found for this alert.
+			{network?.nodes.length === 0 && (
+				<div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground bg-white/80 backdrop-blur-sm z-50">
+					<p>No network connections found.</p>
 				</div>
 			)}
 
-			<GraphLegend />
+			<div className="absolute top-4 left-4 bg-white/90 backdrop-blur p-3 rounded-lg border shadow-sm text-xs space-y-2 z-10">
+				<div className="font-semibold text-slate-900 mb-1">Entity Map</div>
+				<div className="flex items-center gap-2">
+					<div className="w-2 h-2 rounded-full bg-red-600 shadow-[0_0_8px_rgba(220,38,38,0.5)]"></div>
+					<span className="text-slate-600">Suspect</span>
+				</div>
+				<div className="flex items-center gap-2">
+					<div className="w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]"></div>
+					<span className="text-slate-600">Shared Device/IP</span>
+				</div>
+				<div className="flex items-center gap-2">
+					<div className="w-2 h-2 rounded-full bg-slate-500"></div>
+					<span className="text-slate-600">Linked Account</span>
+				</div>
+			</div>
 		</div>
 	);
 }
 
-function GraphLegend() {
+// Wrap in Provider to use `useReactFlow` hook inside
+export default function FraudRingNetwork(props: FraudRingNetworkProps) {
 	return (
-		<div className="absolute top-4 right-4 bg-white/90 p-3 rounded-lg border shadow text-xs">
-			<div className="flex items-center gap-2 mb-1">
-				<div className="w-3 h-3 rounded-full bg-red-600"></div> Suspect
-			</div>
-			<div className="flex items-center gap-2 mb-1">
-				<div className="w-3 h-3 rounded-full bg-yellow-500"></div> Shared Infra
-			</div>
-			<div className="flex items-center gap-2">
-				<div className="w-3 h-3 rounded-full bg-gray-400"></div> Mule
-			</div>
-		</div>
+		<ReactFlowProvider>
+			<FraudRingNetworkContent {...props} />
+		</ReactFlowProvider>
 	);
 }

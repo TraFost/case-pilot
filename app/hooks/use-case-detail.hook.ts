@@ -1,5 +1,5 @@
 import { useAction, useMutation, useQuery } from "convex/react";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -27,6 +27,23 @@ type AuditLog = {
 	justification: string;
 };
 
+type SimilarCaseResult = {
+	caseId: string;
+	caseSummary: string;
+	caseStatus: string;
+	userName: string;
+	outcome: string;
+	outcomeNotes: string | null;
+	similarity: number;
+	evidenceText: string;
+};
+
+function formatShortId(id: string) {
+	const trimmed = id.trim();
+	if (trimmed.length <= 6) return trimmed;
+	return trimmed.slice(-6).toUpperCase();
+}
+
 export function useCaseDetail(alertId: string) {
 	const parsedAlertId = alertId as Id<"alerts">;
 	const caseData = useQuery(api.cases.getCaseDetailByAlertId, {
@@ -43,8 +60,12 @@ export function useCaseDetail(alertId: string) {
 	const generateAndSaveEvidence = useAction(
 		api.embed_actions.generateAndSaveEvidence,
 	);
+	const findSimilarCases = useAction(api.cases_actions.findSimilarCases);
 
 	const analyzingRef = useRef(false);
+	const similarRef = useRef(false);
+	const [similarCases, setSimilarCases] = useState<SimilarCaseResult[]>([]);
+	const [similarLoading, setSimilarLoading] = useState(false);
 
 	useEffect(() => {
 		if (!caseData || analyzingRef.current) return;
@@ -59,6 +80,19 @@ export function useCaseDetail(alertId: string) {
 				analyzingRef.current = false;
 			});
 	}, [caseData, analyzeAlert, parsedAlertId]);
+
+	useEffect(() => {
+		if (!caseData?.case || similarRef.current) return;
+		similarRef.current = true;
+		setSimilarLoading(true);
+		findSimilarCases({ caseId: caseData.case._id })
+			.then((results) => {
+				setSimilarCases(results ?? []);
+			})
+			.finally(() => {
+				setSimilarLoading(false);
+			});
+	}, [caseData?.case, findSimilarCases]);
 
 	const auditLogs = useMemo<AuditLog[]>(() => {
 		if (!caseData?.actions) return [];
@@ -125,8 +159,8 @@ export function useCaseDetail(alertId: string) {
 		}
 
 		const caseTitle = caseData.case
-			? `Case #${caseData.case._id}`
-			: `Alert #${caseData.alert._id}`;
+			? `Case #${formatShortId(caseData.case._id)}`
+			: `Alert #${formatShortId(caseData.alert._id)}`;
 		const caseSubtitle = caseData.alert.trigger;
 		const riskScore = caseData.alert.riskScore;
 		const summary = caseData.case?.summary ?? "";
@@ -198,6 +232,7 @@ export function useCaseDetail(alertId: string) {
 
 			await createEnforcementAction({
 				caseId: caseData.case._id,
+				alertId: caseData.alert._id,
 				userId: caseData.user._id,
 				type: actionName,
 				executedBy: "Analyst",
@@ -206,6 +241,7 @@ export function useCaseDetail(alertId: string) {
 				notes,
 				userStatus: actionName === "FREEZE" ? "Frozen" : "Active",
 				caseStatus: "Closed",
+				alertStatus: actionName === "RESOLVE" ? "Resolved" : undefined,
 			});
 
 			if (EMBEDDING_ACTIONS.has(actionName)) {
@@ -235,6 +271,8 @@ export function useCaseDetail(alertId: string) {
 		reportTimeline,
 		topSignals,
 		...derived,
+		similarCases,
+		similarLoading,
 		handleEnforcementAction,
 	};
 }

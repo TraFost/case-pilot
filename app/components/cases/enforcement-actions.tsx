@@ -5,12 +5,18 @@ import { toast } from "sonner";
 
 interface EnforcementActionsProps {
 	onAction: (actionName: string) => Promise<void>;
+	alertStatus?: string;
+	userStatus?: string | null;
 }
 
 export default function EnforcementActions({
 	onAction,
+	alertStatus,
+	userStatus,
 }: EnforcementActionsProps) {
 	const [loading, setLoading] = useState<string | null>(null);
+	const isFrozen = userStatus === "Frozen";
+	const isResolved = alertStatus === "Resolved";
 
 	const handleAction = async (actionName: string) => {
 		setLoading(actionName);
@@ -40,7 +46,7 @@ export default function EnforcementActions({
 				{/* Freeze - Confirmed Fraud */}
 				<Button
 					onClick={() => handleAction("FREEZE")}
-					disabled={loading !== null}
+					disabled={loading !== null || isFrozen}
 					className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
 				>
 					{loading === "FREEZE" ? "Processing..." : "FREEZE (CONFIRMED FRAUD)"}
@@ -49,7 +55,7 @@ export default function EnforcementActions({
 				{/* Resolve - False Positive */}
 				<Button
 					onClick={() => handleAction("RESOLVE")}
-					disabled={loading !== null}
+					disabled={loading !== null || isResolved}
 					className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90"
 				>
 					{loading === "RESOLVE" ? "Processing..." : "RESOLVE (FALSE POSITIVE)"}

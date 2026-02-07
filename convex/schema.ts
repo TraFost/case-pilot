@@ -94,7 +94,7 @@ export default defineSchema({
 		role: v.string(), // "user" | "assistant"
 		content: v.string(),
 		thoughtProcess: v.optional(v.string()),
-		uiComponent: v.optional(v.string()), // "FREEZE" | "SHADOWBAN"
+		uiComponent: v.optional(v.string()), // "REPORT"
 		relatedTxIds: v.optional(v.array(v.id("transactions"))),
 		createdAt: v.number(),
 	}).index("by_case", ["caseId"]),

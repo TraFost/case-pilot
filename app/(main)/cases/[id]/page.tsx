@@ -2,7 +2,7 @@
 
 import { use } from "react";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import SuspiciousTransactionChart from "@/components/cases/suspicious-transaction-chart";
@@ -11,6 +11,7 @@ import ImpossibleTravelMap from "@/components/cases/impossible-travel-map";
 import CaseReport from "@/components/cases/case-report";
 import EnforcementActions from "@/components/cases/enforcement-actions";
 import AuditTrail from "@/components/cases/audit-trail";
+import SimilarCasesCard from "@/components/cases/similar-cases-card";
 
 import { useCaseDetail } from "@/hooks/use-case-detail.hook";
 
@@ -39,14 +40,19 @@ export default function CaseDetailPage({
 		devices,
 		locations,
 		lastUpdatedLabel,
+		similarCases,
+		similarLoading,
 		handleEnforcementAction,
 	} = useCaseDetail(id);
 
 	if (isLoading) {
 		return (
 			<div className="min-h-screen bg-background">
-				<main className="px-6 py-8">
-					<p className="text-sm text-muted-foreground">Loading case...</p>
+				<main className="flex min-h-screen items-center justify-center px-6 py-8">
+					<div className="flex flex-col items-center gap-3">
+						<Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+						<p className="text-sm text-muted-foreground">Loading case...</p>
+					</div>
 				</main>
 			</div>
 		);
@@ -183,8 +189,11 @@ export default function CaseDetailPage({
 						</div>
 					</div>
 
-					{/* Right: Report & Actions */}
 					<div className="space-y-6">
+						<SimilarCasesCard
+							results={similarCases}
+							isLoading={similarLoading}
+						/>
 						<ImpossibleTravelMap transactions={caseData.transactions} />
 						<CaseReport
 							summary={summary}
@@ -193,7 +202,11 @@ export default function CaseDetailPage({
 							topSignals={topSignals}
 							timeline={reportTimeline}
 						/>
-						<EnforcementActions onAction={handleEnforcementAction} />
+						<EnforcementActions
+							onAction={handleEnforcementAction}
+							alertStatus={caseData.alert.status}
+							userStatus={caseData.user?.status ?? null}
+						/>
 						<AuditTrail logs={auditLogs} />
 					</div>
 				</div>
