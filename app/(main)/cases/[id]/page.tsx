@@ -13,7 +13,6 @@ import EnforcementActions from "@/components/cases/enforcement-actions";
 import AuditTrail from "@/components/cases/audit-trail";
 
 import { useCaseDetail } from "@/hooks/use-case-detail.hook";
-import { formatDateTime } from "@/utils/date.util";
 
 export default function CaseDetailPage({
 	params,
@@ -26,9 +25,20 @@ export default function CaseDetailPage({
 		caseData,
 		isLoading,
 		auditLogs,
-		transactionTimeline,
 		reportTimeline,
 		topSignals,
+		caseTitle,
+		caseSubtitle,
+		riskScore,
+		summary,
+		confidence,
+		recommendedAction,
+		evidenceCount,
+		fraudTags,
+		currencies,
+		devices,
+		locations,
+		lastUpdatedLabel,
 		handleEnforcementAction,
 	} = useCaseDetail(id);
 
@@ -52,42 +62,8 @@ export default function CaseDetailPage({
 		);
 	}
 
-	const caseTitle = caseData.case
-		? `Case #${caseData.case._id}`
-		: `Alert #${caseData.alert._id}`;
-	const caseSubtitle = caseData.alert.trigger;
-	const riskScore = caseData.alert.riskScore;
-	const summary = caseData.case?.summary ?? "";
-	const confidence = caseData.case?.confidence ?? 0;
-	const recommendedAction = caseData.case?.recommendedAction ?? "";
-	const evidenceCount = caseData.alert.evidenceTxIds.length;
-	const fraudTags = Array.from(
-		new Set(
-			caseData.transactions
-				.map((tx) => tx.fraudTag)
-				.filter((tag): tag is string => Boolean(tag)),
-		),
-	);
-	const currencies = Array.from(
-		new Set(caseData.transactions.map((tx) => tx.currency)),
-	);
-	const devices = Array.from(
-		new Set(
-			caseData.transactions
-				.map((tx) => tx.meta?.device)
-				.filter((device): device is string => Boolean(device)),
-		),
-	);
-	const locations = Array.from(
-		new Set(
-			caseData.transactions
-				.map((tx) => tx.meta?.location)
-				.filter((location): location is string => Boolean(location)),
-		),
-	);
-
 	return (
-		<main className="min-h-screen bg-background">
+		<main className="min-h-screen bg-background pb-8">
 			{/* Header */}
 			<header className="border-b border-border bg-card">
 				<div className="px-6 py-4">
@@ -151,7 +127,7 @@ export default function CaseDetailPage({
 									Account & Evidence Summary
 								</h2>
 								<div className="text-xs text-muted-foreground">
-									Last updated: {formatDateTime(caseData.alert.createdAt)}
+									Last updated: {lastUpdatedLabel}
 								</div>
 							</div>
 							<div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
@@ -159,9 +135,6 @@ export default function CaseDetailPage({
 									<p className="text-xs text-muted-foreground">Account</p>
 									<p className="font-semibold text-foreground">
 										{caseData.user?.name ?? "Unknown"}
-									</p>
-									<p className="text-xs text-muted-foreground mt-2">
-										Type: {caseData.user?.accountType ?? "N/A"}
 									</p>
 									<p className="text-xs text-muted-foreground">
 										Status: {caseData.user?.status ?? "N/A"}
@@ -212,7 +185,7 @@ export default function CaseDetailPage({
 
 					{/* Right: Report & Actions */}
 					<div className="space-y-6">
-						<ImpossibleTravelMap />
+						<ImpossibleTravelMap transactions={caseData.transactions} />
 						<CaseReport
 							summary={summary}
 							confidence={confidence}
