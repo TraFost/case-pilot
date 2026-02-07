@@ -13,9 +13,11 @@ import {
 	randBitcoinAddress,
 	randEthereumAddress,
 	randAccount,
+	randCountry,
+	randCountryCode,
+	randAddress,
 } from "@ngneat/falso";
 
-const ACCOUNT_TYPES = ["Retail", "VIP", "Merchant"];
 const USER_STATUS = ["Active", "Frozen", "ShadowBanned"];
 const TX_TYPES = ["Deposit", "Withdrawal", "Transfer"];
 const ALERT_STATUS = ["New", "Investigating", "Resolved"];
@@ -47,6 +49,7 @@ export const seed = mutation({
 	},
 	handler: async (ctx, args) => {
 		const userCount = args.userCount ?? 20;
+		const userIds = [];
 
 		console.log(`Starting seed for ${userCount} users...`);
 
@@ -57,7 +60,6 @@ export const seed = mutation({
 			const userId = await ctx.db.insert("users", {
 				name: randFullName(),
 				email: randEmail(),
-				accountType: rand(ACCOUNT_TYPES),
 				flagged: isFlagged,
 				riskScore: riskScore,
 				status: rand(USER_STATUS),
@@ -68,10 +70,11 @@ export const seed = mutation({
 					randAccount(),
 				]),
 				rawProfile: {
-					country: rand(["US", "DE", "SG", "ID", "AE"]),
+					country: randCountryCode(),
 					device: rand(["iPhone", "Android", "Desktop"]),
 				},
 			});
+			userIds.push(userId);
 
 			const txCount = args.txPerUser ?? randNumber({ min: 5, max: 15 });
 			const userTxIds = [];
@@ -79,6 +82,7 @@ export const seed = mutation({
 			for (let j = 0; j < txCount; j++) {
 				const isFraud = randBoolean();
 
+				const locationCountryCode = randCountryCode();
 				const txId = await ctx.db.insert("transactions", {
 					userId: userId,
 					amount: randFloat({ min: 20, max: 25000, fraction: 2 }),
@@ -91,7 +95,11 @@ export const seed = mutation({
 					meta: {
 						ip: randIp(),
 						device: rand(["iPhone", "Android", "Mac", "Windows"]),
-						location: rand(["US", "SG", "ID", "DE", "NL"]),
+						location: {
+							countryCode: locationCountryCode,
+							country: randCountry(),
+							address: randAddress(),
+						},
 					},
 				});
 
@@ -112,6 +120,7 @@ export const seed = mutation({
 		}
 
 		const entityIds = [];
+		const highRiskEntityIds = [];
 		for (let k = 0; k < 30; k++) {
 			const entityType = rand(ENTITY_TYPES);
 			let entityValue;
@@ -125,16 +134,73 @@ export const seed = mutation({
 					randAccount(),
 				]);
 			} else {
-				entityValue = rand(DEVICES);
+				const deviceType = rand(DEVICES);
+				const deviceId = Math.random().toString(16).slice(2, 14);
+
+				entityValue = `${deviceType}::${deviceId}`;
 			}
 
+			const riskLevel = rand(RISK_LEVEL);
 			const entId = await ctx.db.insert("entities", {
 				type: entityType,
 				value: entityValue,
 				lastActive: randRecentDate().getTime(),
-				riskLevel: rand(RISK_LEVEL),
+				riskLevel,
 			});
 			entityIds.push(entId);
+			if (riskLevel === "High") highRiskEntityIds.push(entId);
+		}
+
+		const sharedEntities = highRiskEntityIds.length
+			? highRiskEntityIds
+			: entityIds.slice(0, 6);
+
+		const ringCount = randNumber({ min: 2, max: 4 });
+		const remainingUsers = [...userIds];
+
+		for (let ringIndex = 0; ringIndex < ringCount; ringIndex += 1) {
+			const ringSize = randNumber({ min: 3, max: 6 });
+			const ringUsers = remainingUsers.splice(0, ringSize);
+			if (!ringUsers.length) break;
+
+			const ringEntityCount = randNumber({ min: 2, max: 4 });
+			const ringEntities = Array.from({ length: ringEntityCount }, () =>
+				rand(sharedEntities),
+			);
+
+			for (const userId of ringUsers) {
+				for (const entityId of ringEntities) {
+					await ctx.db.insert("links", {
+						userId,
+						entityId,
+						strength: Math.round(randFloat({ min: 0.6, max: 1 }) * 100) / 100,
+						firstSeen: randRecentDate().getTime(),
+					});
+				}
+
+				const personalCount = randNumber({ min: 1, max: 2 });
+				for (let i = 0; i < personalCount; i += 1) {
+					await ctx.db.insert("links", {
+						userId,
+						entityId: rand(entityIds),
+						strength: Math.round(randFloat({ min: 0.2, max: 0.7 }) * 100) / 100,
+						firstSeen: randRecentDate().getTime(),
+					});
+				}
+			}
+		}
+
+		for (const userId of userIds) {
+			const linkCount = randNumber({ min: 1, max: 2 });
+			for (let i = 0; i < linkCount; i += 1) {
+				const entityId = rand(entityIds);
+				await ctx.db.insert("links", {
+					userId,
+					entityId,
+					strength: Math.round(randFloat({ min: 0.2, max: 1 }) * 100) / 100,
+					firstSeen: randRecentDate().getTime(),
+				});
+			}
 		}
 
 		console.log("Seed Done! Database filled with Mock data.");

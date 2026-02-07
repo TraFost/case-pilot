@@ -6,7 +6,6 @@ export default defineSchema({
 	users: defineTable({
 		name: v.string(),
 		email: v.string(),
-		accountType: v.string(), // "Retail" | "VIP" | "Merchant"
 		flagged: v.boolean(),
 		riskScore: v.number(), // 0–100 live aggregate
 		status: v.string(), // "Active" | "Frozen" | "ShadowBanned"
