@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
@@ -39,27 +37,27 @@ export default function EnforcementActions({
 			</h2>
 
 			<div className="space-y-3">
-				{/* Freeze Account - Primary */}
+				{/* Freeze - Confirmed Fraud */}
 				<Button
-					onClick={() => handleAction("FREEZE ACCOUNT")}
+					onClick={() => handleAction("FREEZE")}
 					disabled={loading !== null}
 					className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
 				>
-					{loading === "FREEZE ACCOUNT" ? "Processing..." : "FREEZE ACCOUNT"}
+					{loading === "FREEZE" ? "Processing..." : "FREEZE (CONFIRMED FRAUD)"}
 				</Button>
 
-				{/* Hold & Review - Secondary */}
+				{/* Resolve - False Positive */}
 				<Button
-					onClick={() => handleAction("HOLD & REVIEW")}
+					onClick={() => handleAction("RESOLVE")}
 					disabled={loading !== null}
 					className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90"
 				>
-					{loading === "HOLD & REVIEW" ? "Processing..." : "HOLD & REVIEW"}
+					{loading === "RESOLVE" ? "Processing..." : "RESOLVE (FALSE POSITIVE)"}
 				</Button>
 			</div>
 
 			<div className="mt-4 p-3 bg-muted/30 rounded text-xs text-muted-foreground">
-				<p className="font-semibold text-foreground mb-1">⚠️ Remember:</p>
+				<p className="font-semibold text-foreground mb-1">Remember:</p>
 				<p>All actions are logged and require justification in audit trail.</p>
 			</div>
 		</div>

@@ -13,7 +13,6 @@ export default function AlertsPage() {
 		chartData,
 		highRiskCount,
 		linkedRingsCount,
-		topRiskAccounts,
 		isAttackMode,
 		onInjectAttack,
 	} = useAlerts();
@@ -47,7 +46,7 @@ export default function AlertsPage() {
 							totalAlerts={alerts.length}
 							highRiskAlerts={highRiskCount}
 							linkedRings={linkedRingsCount}
-							topRiskAccounts={topRiskAccounts}
+							alerts={alerts}
 						/>
 					</div>
 				</div>
