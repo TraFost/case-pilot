@@ -10,9 +10,11 @@ export const createEnforcementAction = mutation({
 		executedAt: v.number(),
 		result: v.string(),
 		notes: v.optional(v.string()),
+		userStatus: v.optional(v.string()),
+		caseStatus: v.optional(v.string()),
 	},
 	handler: async (ctx, args) => {
-		return await ctx.db.insert("actions", {
+		const actionId = await ctx.db.insert("actions", {
 			caseId: args.caseId,
 			userId: args.userId,
 			type: args.type,
@@ -21,5 +23,14 @@ export const createEnforcementAction = mutation({
 			result: args.result,
 			notes: args.notes,
 		});
+
+		if (args.userStatus) {
+			await ctx.db.patch(args.userId, { status: args.userStatus });
+		}
+		if (args.caseStatus) {
+			await ctx.db.patch(args.caseId, { status: args.caseStatus });
+		}
+
+		return actionId;
 	},
 });
