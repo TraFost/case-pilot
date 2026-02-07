@@ -1,16 +1,23 @@
-# CasePilot Next.js + Convex Boilerplate
+# CasePilot
 
-Opinionated starter with Next.js App Router, Convex, and an AI-ready stack.
+CasePilot is a AML and fraud investigation console. It combines real-time alert triage, case investigation, AI-guided analysis with RAG sources, and SAR report generation with PDF export.
 
-## Features
+## What this app does
 
-- Next.js App Router UI under app/
-- Convex schema + functions under convex/
-- Typed client APIs via generated Convex bindings
-- Zod-validated public env variables
-- OpenRouter AI SDK helpers (analysis + embeddings)
-- Component variants with class-variance-authority + Tailwind merge
-- Toasts wired with Sonner + lucide icons
+- Monitor live fraud alerts, risk trends, and ring activity
+- Investigate cases with maps, charts, and evidence timelines
+- Use the AI assistant for grounded analysis and sources
+- Generate SAR narratives and export to PDF
+- Track enforcement actions and audit trails
+
+## Architecture at a glance
+
+- Next.js App Router UI in app/
+- Convex backend in convex/ (queries, mutations, actions, scheduler)
+- AI via OpenRouter for chat + SAR narratives
+- RAG sources pulled from evidence and surfaced in the chat UI
+
+More detail: [docs/main-features.md](docs/main-features.md)
 
 ## Tech stack
 
@@ -18,6 +25,7 @@ Opinionated starter with Next.js App Router, Convex, and an AI-ready stack.
 - Convex 1.x
 - Tailwind CSS v4 + tw-animate-css
 - Zod, AI SDK, OpenRouter
+- Recharts, ReactFlow, react-simple-maps
 
 ## Quick start
 
@@ -29,8 +37,7 @@ pnpm install
 
 2. Set environment variables
 
-Create a .env.local file and include the public keys validated in
-[app/configs/env.config.ts](app/configs/env.config.ts):
+Create a .env.local file and include the public keys validated in [app/configs/env.config.ts](app/configs/env.config.ts):
 
 ```bash
 NEXT_PUBLIC_CONVEX_URL=
@@ -48,6 +55,18 @@ pnpm dev
 
 Open http://localhost:3000
 
+## Seeding demo data
+
+```bash
+pnpm run server:seed
+```
+
+To clear and reseed:
+
+```bash
+pnpm run server:seed:clear
+```
+
 ## Scripts
 
 ```bash
@@ -62,21 +81,19 @@ pnpm lint
 - app/ — App Router pages, UI components, hooks, providers
 - convex/ — schema + query/mutation functions
 - public/ — static assets
+- docs/ — architecture snapshot
 
 Key references:
 
 - [app/layout.tsx](app/layout.tsx) wires the Convex provider + toaster
-- [app/hooks/tasks.hook.ts](app/hooks/tasks.hook.ts) shows the hook → api pattern
+- [app/hooks/use-alerts.hook.ts](app/hooks/use-alerts.hook.ts) shows the hook → API pattern
 - [convex/schema.ts](convex/schema.ts) defines the data model
-- [app/components/ui/button.tsx](app/components/ui/button.tsx) shows CVA usage
+- [app/utils/pdf.util.ts](app/utils/pdf.util.ts) builds SAR PDFs
 
 ## Convex workflow
 
-Convex functions live in convex/. See [convex/README.md](convex/README.md)
-for CLI usage and function patterns.
+Convex functions live in convex/. See [convex/README.md](convex/README.md) for CLI usage and function patterns.
 
 ## Deployment
 
-Use your preferred platform (Vercel recommended for Next.js). Ensure the
-same public env vars from [app/configs/env.config.ts](app/configs/env.config.ts)
-are configured in the deployment environment.
+Deploy to Vercel or your preferred platform. Ensure the same public env vars from [app/configs/env.config.ts](app/configs/env.config.ts) are configured in the deployment environment.
