@@ -4,13 +4,8 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { formatAuditTimestamp, formatDateTime } from "@/utils/date.util";
-import {
-	formatCurrencyWithCode,
-	getCurrencyFromWalletAddress,
-	normalizeCurrency,
-} from "@/utils/currency.util";
 
-const EMBEDDING_ACTIONS = new Set(["FREEZE ACCOUNT", "HOLD & REVIEW"]);
+const EMBEDDING_ACTIONS = new Set(["FREEZE", "RESOLVE"]);
 
 type TimelineItem = {
 	time: string;
@@ -78,34 +73,6 @@ export function useCaseDetail(alertId: string) {
 		});
 	}, [caseData?.actions]);
 
-	const transactionTimeline = useMemo<TransactionTimelineItem[]>(() => {
-		if (!caseData?.transactions) return [];
-		const walletCurrency = getCurrencyFromWalletAddress(
-			caseData.user?.walletAddress ?? null,
-		);
-
-		return [...caseData.transactions]
-			.sort((a, b) => b.timestamp - a.timestamp)
-			.map((tx) => {
-				const time = formatDateTime(tx.timestamp);
-				const currency = normalizeCurrency(tx.currency ?? walletCurrency);
-				const highlight = Boolean(tx.isFraud || tx.fraudTag);
-				const note = tx.fraudTag
-					? `Suspicious: ${tx.fraudTag}`
-					: highlight
-						? "Suspicious activity flagged"
-						: "Normal activity";
-
-				return {
-					time,
-					amount: formatCurrencyWithCode(tx.amount, currency),
-					type: tx.type,
-					note,
-					highlight,
-				};
-			});
-	}, [caseData?.transactions, caseData?.user?.walletAddress]);
-
 	const reportTimeline = useMemo<TimelineItem[]>(() => {
 		const timeline = caseData?.case?.timeline;
 		if (!Array.isArray(timeline)) return [];
@@ -139,11 +106,96 @@ export function useCaseDetail(alertId: string) {
 		return signals;
 	}, [caseData]);
 
+	const derived = useMemo(() => {
+		if (!caseData) {
+			return {
+				caseTitle: "",
+				caseSubtitle: "",
+				riskScore: 0,
+				summary: "",
+				confidence: 0,
+				recommendedAction: "",
+				evidenceCount: 0,
+				fraudTags: [] as string[],
+				currencies: [] as string[],
+				devices: [] as string[],
+				locations: [] as string[],
+				lastUpdatedLabel: "",
+			};
+		}
+
+		const caseTitle = caseData.case
+			? `Case #${caseData.case._id}`
+			: `Alert #${caseData.alert._id}`;
+		const caseSubtitle = caseData.alert.trigger;
+		const riskScore = caseData.alert.riskScore;
+		const summary = caseData.case?.summary ?? "";
+		const confidence = caseData.case?.confidence ?? 0;
+		const recommendedAction = caseData.case?.recommendedAction ?? "";
+		const evidenceCount = caseData.alert.evidenceTxIds.length;
+		const fraudTags = Array.from(
+			new Set(
+				caseData.transactions
+					.map((tx) => tx.fraudTag)
+					.filter((tag): tag is string => Boolean(tag)),
+			),
+		);
+		const currencies = Array.from(
+			new Set(caseData.transactions.map((tx) => tx.currency)),
+		);
+		const devices = Array.from(
+			new Set(
+				caseData.transactions
+					.map((tx) => tx.meta?.device)
+					.filter((device): device is string => Boolean(device)),
+			),
+		);
+		const locations = Array.from(
+			new Set(
+				caseData.transactions
+					.map((tx) => {
+						const location = tx.meta?.location;
+						if (!location) return null;
+						if (typeof location === "string") return location;
+						if (typeof location === "object" && location.countryCode) {
+							return location.countryCode;
+						}
+						if (typeof location === "object" && location.country) {
+							return location.country;
+						}
+						return null;
+					})
+					.filter((location): location is string => Boolean(location)),
+			),
+		);
+		const lastUpdatedLabel = formatDateTime(caseData.alert.createdAt);
+
+		return {
+			caseTitle,
+			caseSubtitle,
+			riskScore,
+			summary,
+			confidence,
+			recommendedAction,
+			evidenceCount,
+			fraudTags,
+			currencies,
+			devices,
+			locations,
+			lastUpdatedLabel,
+		};
+	}, [caseData]);
+
 	const handleEnforcementAction = useCallback(
 		async (actionName: string) => {
 			if (!caseData?.case || !caseData.user) return;
 
 			const executedAt = Date.now();
+			const notes =
+				actionName === "FREEZE"
+					? "Confirmed fraud. High risk behavior verified."
+					: "Cleared false positive after verification.";
+
 			await createEnforcementAction({
 				caseId: caseData.case._id,
 				userId: caseData.user._id,
@@ -151,15 +203,22 @@ export function useCaseDetail(alertId: string) {
 				executedBy: "Analyst",
 				executedAt,
 				result: "Success",
+				notes,
+				userStatus: actionName === "FREEZE" ? "Frozen" : "Active",
+				caseStatus: "Closed",
 			});
 
 			if (EMBEDDING_ACTIONS.has(actionName)) {
-				const text = `Enforcement action executed: ${actionName}. User: ${caseData.user.name}. Alert: ${caseData.alert._id}. Risk score: ${caseData.alert.riskScore}.`;
+				const narrative =
+					actionName === "FREEZE"
+						? `FRAUD CONFIRMED: User ${caseData.user.name} was frozen. Risk Pattern: ${caseData.alert.trigger}. Analyst Notes: ${notes}`
+						: `FALSE POSITIVE CLEARED: User ${caseData.user.name} was resolved. Trigger: ${caseData.alert.trigger} was investigated. Outcome: Activity deemed legitimate. Reason: ${notes}`;
 				const entityId = fraudNetwork?.nodes.find(
 					(node) => node.type === "shared" && node.entityId,
 				)?.entityId;
+
 				await generateAndSaveEvidence({
-					text,
+					text: narrative,
 					caseId: caseData.case._id,
 					source: "Enforcement Action",
 					...(entityId ? { entityId } : {}),
@@ -173,9 +232,9 @@ export function useCaseDetail(alertId: string) {
 		caseData,
 		isLoading: caseData === undefined,
 		auditLogs,
-		transactionTimeline,
 		reportTimeline,
 		topSignals,
+		...derived,
 		handleEnforcementAction,
 	};
 }
